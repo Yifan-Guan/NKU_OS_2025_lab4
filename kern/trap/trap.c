@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <trap.h>
 #include <vmm.h>
+#include <sbi.h>
 
 #define TICK_NUM 100
 
@@ -116,7 +117,7 @@ void interrupt_handler(struct trapframe *tf)
         if (++ticks % TICK_NUM == 0) {
             print_ticks();
             if (++num == 10) {
-                ticks = 0; 
+                sbi_shutdown();
             }
         }
         break;
