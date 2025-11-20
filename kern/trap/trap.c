@@ -86,6 +86,7 @@ extern struct mm_struct *check_mm_struct;
 void interrupt_handler(struct trapframe *tf)
 {
     intptr_t cause = (tf->cause << 1) >> 1;
+    static int num = 0;
     switch (cause)
     {
     case IRQ_U_SOFT:
@@ -111,6 +112,13 @@ void interrupt_handler(struct trapframe *tf)
         // clear_csr(sip, SIP_STIP);
 
         /*LAB3 请补充你在lab3中的代码 */ 
+        clock_set_next_event();
+        if (++ticks % TICK_NUM == 0) {
+            print_ticks();
+            if (++num == 10) {
+                ticks = 0; 
+            }
+        }
         break;
     case IRQ_H_TIMER:
         cprintf("Hypervisor software interrupt\n");
