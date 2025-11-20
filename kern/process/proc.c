@@ -88,7 +88,7 @@ alloc_proc(void)
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL)
     {
-        // LAB4:EXERCISE1 YOUR CODE
+        // LAB4:EXERCISE1 2312313
         /*
          * below fields in proc_struct need to be initialized
          *       enum proc_state state;                      // Process state
@@ -104,7 +104,14 @@ alloc_proc(void)
          *       uint32_t flags;                             // Process flag
          *       char name[PROC_NAME_LEN + 1];               // Process name
          */
-        
+        // 1. 使用 memset 将整个结构体清零
+        // 这会将 runs, kstack, need_resched, parent, mm, tf, flags, name, context 等初始化为 0 或 NULL
+        memset(proc, 0, sizeof(struct proc_struct));
+
+        // 2. 设置特定的初始状态
+        proc->state = PROC_UNINIT; // 设置进程状态为“未初始化”
+        proc->pid = -1;             // 设置PID为一个无效值，表示尚未分配
+        proc->pgdir = boot_pgdir_pa; // 内核线程共享内核页表
     }
     return proc;
 }
@@ -175,7 +182,7 @@ void proc_run(struct proc_struct *proc)
 {
     if (proc != current)
     {
-        // LAB4:EXERCISE3 YOUR CODE
+        // LAB4:EXERCISE3 2312313
         /*
          * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
          * MACROs or Functions:
@@ -184,7 +191,17 @@ void proc_run(struct proc_struct *proc)
          *   lsatp():                   Modify the value of satp register
          *   switch_to():              Context switching between two processes
          */
+        bool intr_flag;
 
+        local_intr_save(intr_flag);
+        {
+            struct proc_struct *prev = current;
+            current = proc;
+
+            lsatp(current->pgdir); 
+            switch_to(&(prev->context), &(current->context));
+        }
+        local_intr_restore(intr_flag);
     }
 }
 
@@ -297,7 +314,7 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
         goto fork_out;
     }
     ret = -E_NO_MEM;
-    // LAB4:EXERCISE2 YOUR CODE
+    // LAB4:EXERCISE2 2312313
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
      * MACROs or Functions:
@@ -316,12 +333,29 @@ int do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf)
      */
 
     //    1. call alloc_proc to allocate a proc_struct
+    if ((proc = alloc_proc()) == NULL){
+        goto fork_out;
+    }
+    proc->parent = current;
     //    2. call setup_kstack to allocate a kernel stack for child process
+    if (setup_kstack(proc) != 0){
+        goto bad_fork_cleanup_proc;
+    }
     //    3. call copy_mm to dup OR share mm according clone_flag
+    if (copy_mm(clone_flags, proc) != 0){
+        goto bad_fork_cleanup_kstack;
+    }
     //    4. call copy_thread to setup tf & context in proc_struct
+    copy_thread(proc, stack, tf);
     //    5. insert proc_struct into hash_list && proc_list
+    proc->pid = get_pid();    
+    hash_proc(proc);
+    list_add(&proc_list, &(proc->list_link));
+    nr_process++;
     //    6. call wakeup_proc to make the new child process RUNNABLE
+    wakeup_proc(proc);
     //    7. set ret vaule using child proc's pid
+    ret = proc->pid;
     
 fork_out:
     return ret;
